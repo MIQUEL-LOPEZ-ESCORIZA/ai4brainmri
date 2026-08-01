@@ -1,0 +1,14 @@
+# Final evaluation of the epilepsy_train.yaml checkpoint on the internal OpenNeuro test cohort
+# (companion to epilepsy_episurg.yaml, which scores the external cohort instead).
+task_name: epilepsy_internal_eval
+
+data:
+  test_csv: /path/to/data/OpenNeuro_epilepsy_large_test.csv
+  batch_size: 64
+
+model:
+  pretrained: checkpoints/epilepsy.pt # output of ../finetune/epilepsy_train.yaml
+  num_classes: 2
+
+train:
+  smooth_mci_label: false

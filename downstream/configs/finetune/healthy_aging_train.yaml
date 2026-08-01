@@ -1,0 +1,21 @@
+# Full fine-tuning for biological age estimation (regression). Per the paper, this is where ASP
+# shows its clearest advantage over plain MAE pretraining. Produces the checkpoint that
+# ../eval/healthy_aging.yaml and ../eval/healthy_aging_external.yaml score.
+task_name: healthy_aging_train
+
+data:
+  train_csv: /path/to/data/healthy_aging_train.csv
+  val_csv: /path/to/data/healthy_aging_val.csv
+  batch_size: 64
+
+model:
+  pretrained: /path/to/checkpoints/asp_pretrained.pth
+  num_classes: 1 # regression head
+  save_path: checkpoints/healthy_aging.pt
+
+train:
+  max_epochs: 20
+  val_every: 2
+  base_lr: 1.5e-4
+  weight_decay: 0.005
+  smooth_mci_label: false

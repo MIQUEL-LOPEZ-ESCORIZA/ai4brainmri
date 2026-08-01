@@ -1,0 +1,15 @@
+# Final evaluation of the epilepsy_train.yaml checkpoint on the external EPISURG cohort
+# (independent data source, per paper Methods "Diagnostics of epilepsy"). Reports bootstrap-CI'd
+# AUROC -- plain binary task, no pairwise AD/MCI/CN breakdown.
+task_name: epilepsy_episurg_eval
+
+data:
+  test_csv: /path/to/data/OpenNeuro_epilepsy_EPISURG_large_test_external.csv
+  batch_size: 64
+
+model:
+  pretrained: checkpoints/epilepsy.pt # output of ../finetune/epilepsy_train.yaml
+  num_classes: 2
+
+train:
+  smooth_mci_label: false

@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Environments
+.venv*/
+venv/
+env/
+
+# Training artifacts (never commit these -- this is exactly what made the old repo unusable)
+checkpoints/
+output/
+wandb/
+*.pt
+*.pth
+*.npy
+*.pkl
+
+# SLURM job logs -- **/ prefix is required: the old repo's equivalent rule was unanchored and
+# silently matched nothing except a top-level slurm/, letting ~1GB of logs get committed.
+**/slurm/*.out
+**/slurm/*.err
+!**/slurm/.gitkeep
+
+# Data (never distributed with the repo)
+*.nii
+*.nii.gz
+*.mgz
+*.csv
+# ...except small reference/lookup tables that are really part of the pipeline definition, not
+# per-subject data -- the 39 ASP brain regions (~4KB), unlike sample_segmentation.csv (~21MB,
+# per-subject cluster paths) which stays covered by the *.csv rule above.
+!**/selected_brain_regions.csv
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

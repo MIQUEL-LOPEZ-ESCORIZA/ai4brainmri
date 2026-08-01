@@ -1,0 +1,19 @@
+# Same as epilepsy.yaml, scored on the external EPISURG cohort instead of the internal OpenNeuro
+# test set -- matches notebooks/downstream_linprob_pipeline.ipynb, cell 16 ("external").
+task_name: epilepsy_linear_probe_episurg
+
+data:
+  pool_csv: /path/to/data/non_pretraining_non_AD_scans.csv
+  join_col: subject_session
+  train_csv: /path/to/data/OpenNeuro_epilepsy_small_train.csv
+  test_csv: /path/to/data/OpenNeuro_epilepsy_EPISURG_large_test_external.csv
+  label_col: group
+  label_map:
+    hc: 0
+    fcd: 1
+    epilepsy: 1
+  batch_size: 8
+
+model:
+  pretrained: /path/to/checkpoints/asp_pretrained.pth
+  num_classes: 2

@@ -1,0 +1,12 @@
+# Final evaluation of the healthy_aging_train.yaml checkpoint on the internal UK Biobank
+# held-out test cohort. Reports bootstrap-CI'd Pearson correlation, MAE, and MSE -- matches
+# notebooks/healthy_aging_evaluation.ipynb (cell 3).
+task_name: healthy_aging_eval
+
+data:
+  test_csv: /path/to/data/healthy_aging_test.csv
+  batch_size: 64
+
+model:
+  pretrained: checkpoints/healthy_aging.pt # output of ../finetune/healthy_aging_train.yaml
+  num_classes: 1

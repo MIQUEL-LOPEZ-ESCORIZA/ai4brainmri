@@ -1,0 +1,23 @@
+# Full fine-tuning of the ASP-pretrained encoder on Alzheimer's diagnosis (ADNI). Produces the
+# checkpoint that ../eval/ad_diagnosis.yaml scores (internal ADNI test cohort is one of the
+# per-cohort breakdowns in that combined test CSV, alongside the external cohorts).
+task_name: ad_diagnosis_train
+
+data:
+  train_csv: /path/to/data/ADNI_train.csv
+  val_csv: /path/to/data/ADNI_val.csv
+  batch_size: 64
+
+model:
+  # Raw ASP-pretrained checkpoint (see pretraining/README.md) -- point this at your own.
+  pretrained: /path/to/checkpoints/asp_pretrained.pth
+  num_classes: 2 # binary classification head; label smoothing below turns 3 diagnoses into a soft 2-way target
+  save_path: checkpoints/ad_diagnosis.pt
+
+train:
+  max_epochs: 100
+  val_every: 2
+  base_lr: 1.5e-4
+  weight_decay: 0.005
+  # healthy=0, Alzheimer's=1, MCI=0.5, per paper Methods ("Linear Models with Anatomical Features")
+  smooth_mci_label: true

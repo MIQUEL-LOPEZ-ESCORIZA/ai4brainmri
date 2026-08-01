@@ -1,0 +1,15 @@
+# Final evaluation of the healthy_aging_train.yaml checkpoint on an external NACC cohort --
+# matches notebooks/healthy_aging_evaluation.ipynb (cell 4). Unlike the other eval configs, the
+# original notebook pre-filters this cohort to *healthy* subjects only (SCANUDSD==1) under 90
+# years old, to avoid covariate shift from the diagnosis mix / age range differing from the
+# training cohort -- apply the same filtering when you build test_csv, this script does not do
+# it for you.
+task_name: healthy_aging_external_eval
+
+data:
+  test_csv: /path/to/data/non_pretraining_brain_age_gap_scans_healthy_under_90.csv
+  batch_size: 64
+
+model:
+  pretrained: checkpoints/healthy_aging.pt # output of ../finetune/healthy_aging_train.yaml
+  num_classes: 1

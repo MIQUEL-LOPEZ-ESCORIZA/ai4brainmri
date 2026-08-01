@@ -1,0 +1,71 @@
+MODEL:
+  # ASP starts from a plain-MAE-pretrained encoder -- point both at that checkpoint (see
+  # pretraining/README.md, "Stage 1"). Loaded by build_seg()/build_mae() respectively.
+  SSL_PRETRAINED: /path/to/checkpoints/mae_pretrained.pt
+  MAE_PRETRAINED: /path/to/checkpoints/mae_pretrained.pt
+  # NOT currently read by any code in seg_mae_combined_train.py (confirmed by grep) -- the name
+  # implies a prior "frozen encoder, train decoder only" checkpoint, but build_seg() only ever
+  # loads SSL_PRETRAINED. Left in place in case that phase is wired up later; don't rely on it.
+  SEG_PRETRAINED: /path/to/checkpoints/seg_freeze_dec_checkpoint.pth
+  CHECKPOINT_DIR: checkpoints/asp
+DATA:
+  # Ships with the repo (pretraining/files/sample_segmentation.csv) as a real template --
+  # its own img_path_T1_mni152/img_seg_path_T1 columns still point at the original cluster, so
+  # you'll need to regenerate it for your own data before this actually loads anything.
+  TRAIN_CSV_PATH: pretraining/files/sample_segmentation.csv
+  CACHE_DIR: null
+  DATA_PERCENTAGE: 1.0
+  TRAINING_PERCENTAGE: 0.9
+  GROUPING: 'global'
+  PIN_MEMORY: False
+  NUM_WORKERS: 4
+TRAIN:
+  # NOTE: these don't match the paper's stated ASP run (400 epochs, base LR 5e-4, 5-epoch
+  # warmup). BASE_LR here also gets scaled down further at runtime (x batch_size/256, see
+  # seg_mae_combined_train.py::main()). Most likely a stale value left over from a later
+  # near-frozen continuation run rather than what produced the published checkpoint -- verify
+  # against your own run's CHECKPOINT_DIR/config_dump.yaml before trusting these numbers.
+  # Left unchanged: see pretraining/README.md.
+  MAX_EPOCHS: 1000
+  BATCH_SIZE: 8
+  VAL_EVERY: 1
+  SAVECKP_FREQ: 1
+  BASE_LR: 1.5e-8
+  MIN_LR: 1.5e-8
+  TEMPERATURE: 0.5
+  BETA1: 0.9
+  BETA2: 0.999
+  WEIGHT_DECAY: 0.005
+  PER_WARMUP: 0.01
+  WARMUP_EPOCHS: 0
+  GRAD_CLIP: 3.0
+  OPTIMIZER: AdamW
+  SCHEDULER: cosine
+VIT:
+  INPUT_SIZE: 128
+  PATCH_SIZE: 16
+  IN_CHANS: 1
+  DROPOUT_RATE: 0.
+  PATCH_EMBED: 'conv'
+  POS_EMBED: 'sincos'
+  SPATIAL_DIMS: 3
+  HIDDEN_SIZE: 768
+  NUM_LAYERS: 12
+  MLP_DIM: 3072
+  NUM_HEADS: 12
+  USE_BIAS: True
+  USE_FLASH_ATTN: False
+  SMOOTH_MCI_LABEL: True
+MAE:
+  MASK_RATIO: 0.4
+WANDB:
+  WANDB_ENABLE: True
+  PROJECT: SEGMENTATION&MAE
+  RUN: mae_seg_combined
+LOG:
+  FILENAME: mae_seg_combined
+SEED: 42
+# NOT read by seg_mae_combined_train.py::main() -- create_logger() is called with a hardcoded
+# output_dir="logs" instead of this field. Kept for documentation; editing it has no effect.
+OUTPUT: logs
+USE_AMP: true

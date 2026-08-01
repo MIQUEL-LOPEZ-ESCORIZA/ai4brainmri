@@ -1,0 +1,16 @@
+# Same as glioma_registered.yaml, but on raw (unregistered) volumes instead of MNI152-registered
+# ones -- the original repo compared both preprocessing variants for this task (notebooks/
+# downstream_linprob_pipeline.ipynb, cell 17: ucsf_pdgm_raw vs ucsf_pdgm embeddings).
+task_name: glioma_linear_probe_raw
+
+data:
+  train_csv: /path/to/data/ucsf_pdgm_raw_train.csv
+  test_csv: /path/to/data/ucsf_pdgm_raw_test.csv
+  img_path_col: img_path_T1_mni152 # holds the raw nii_path for this variant, see original repo's notebook cell 2
+  label_col: label
+  group_col: ID
+  batch_size: 8
+
+model:
+  pretrained: /path/to/checkpoints/asp_pretrained.pth
+  num_classes: 2

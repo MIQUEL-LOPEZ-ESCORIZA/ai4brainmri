@@ -1,0 +1,25 @@
+# Linear probing for epilepsy detection, reusing the shared embedding pool -- matches
+# notebooks/downstream_linprob_pipeline.ipynb, cell 16 (internal OpenNeuro test cohort). This is
+# an alternative to configs/finetune/epilepsy_train.yaml (partial fine-tuning); the original repo
+# evaluated epilepsy both ways.
+#
+# The notebook compares a small vs. a large training cohort; swap train_csv to
+# OpenNeuro_epilepsy_large_train.csv (e.g. via --set data.train_csv=...) for that comparison --
+# both draw embeddings from the same pool, so this doesn't require re-extracting anything.
+task_name: epilepsy_linear_probe
+
+data:
+  pool_csv: /path/to/data/non_pretraining_non_AD_scans.csv
+  join_col: subject_session
+  train_csv: /path/to/data/OpenNeuro_epilepsy_small_train.csv
+  test_csv: /path/to/data/OpenNeuro_epilepsy_large_test.csv # internal test cohort
+  label_col: group
+  label_map:
+    hc: 0
+    fcd: 1
+    epilepsy: 1
+  batch_size: 8
+
+model:
+  pretrained: /path/to/checkpoints/asp_pretrained.pth
+  num_classes: 2

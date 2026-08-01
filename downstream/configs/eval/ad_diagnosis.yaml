@@ -1,0 +1,17 @@
+# Final evaluation of the ad_diagnosis_train.yaml checkpoint on the broad multi-cohort test set
+# (ADNI internal test + NACC/AIBL/OASIS1-4/MIRIAD external cohorts). Reports the 3-way pairwise
+# AD-diagnosis macro-AUC (AD-vs-CN, AD-vs-MCI, MCI-vs-CN) with bootstrap CIs, both overall and
+# per source_dataset cohort -- matches notebooks/eval_vit_AD_results (1).ipynb.
+task_name: ad_diagnosis_eval
+
+data:
+  test_csv: /path/to/data/ADNI_NACC_AIBL_OASIS1234_MIRIAD_diagnosis_test.csv
+  cohort_col: source_dataset # per-cohort breakdown: ADNI, NACC, AIBL, OASIS1-4, MIRIAD
+  batch_size: 64
+
+model:
+  pretrained: checkpoints/ad_diagnosis.pt # output of ../finetune/ad_diagnosis_train.yaml
+  num_classes: 2
+
+train:
+  smooth_mci_label: true # selects the pairwise AD_CN/AD_MCI/MCI_CN macro-AUC in evaluate.py

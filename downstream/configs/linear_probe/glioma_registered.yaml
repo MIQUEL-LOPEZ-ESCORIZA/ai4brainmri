@@ -1,0 +1,20 @@
+# Linear probing (frozen encoder + sklearn LogisticRegression) for glioma IDH-mutation
+# detection on UCSF-PDGM, using MNI152-registered volumes. Per paper Methods: "used for ...
+# detection of tumor IDH Mutation, due to the small size of the training datasets."
+#
+# UCSF-PDGM has multiple scans/sessions per patient -- group_col averages per-patient
+# predictions before scoring AUROC, matching notebooks/downstream_linprob_pipeline.ipynb (cell
+# 17: `test.groupby(['ID']).agg({'pred': 'mean', ...})`).
+task_name: glioma_linear_probe_registered
+
+data:
+  train_csv: /path/to/data/ucsf_pdgm_train.csv
+  test_csv: /path/to/data/ucsf_pdgm_test.csv
+  img_path_col: img_path_T1_mni152
+  label_col: label
+  group_col: ID
+  batch_size: 8
+
+model:
+  pretrained: /path/to/checkpoints/asp_pretrained.pth
+  num_classes: 2

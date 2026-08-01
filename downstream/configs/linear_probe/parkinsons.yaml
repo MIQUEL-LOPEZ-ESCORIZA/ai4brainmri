@@ -1,0 +1,17 @@
+# Linear probing for Parkinson's diagnosis (PPMI), reusing embeddings from the shared
+# "non_pretraining_non_AD_scans" pool instead of extracting fresh embeddings -- matches
+# notebooks/downstream_linprob_pipeline.ipynb, cell 14. Paper Methods: linear probing was used
+# for Parkinson's "due to the small size of the training datasets."
+task_name: parkinsons_linear_probe
+
+data:
+  pool_csv: /path/to/data/non_pretraining_non_AD_scans.csv # shared embedding pool
+  join_col: subject_session
+  train_csv: /path/to/data/PPMI_trainval.csv
+  test_csv: /path/to/data/PPMI_test.csv
+  label_col: PD_diagnosis
+  batch_size: 8
+
+model:
+  pretrained: /path/to/checkpoints/asp_pretrained.pth
+  num_classes: 2

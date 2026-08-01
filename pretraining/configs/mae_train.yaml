@@ -1,0 +1,59 @@
+MODEL:
+  CHECKPOINT_DIR: checkpoints/mae
+DATA:
+  # Ships with the repo (pretraining/files/sample_segmentation.csv) -- only its
+  # img_path_T1_mni152 / is_img_path_T1_mni152 columns are used here, no segmentation labels
+  # needed for this stage. Same file the ASP config points at; regenerate its paths for your own
+  # data before this actually loads anything.
+  TRAIN_CSV_PATH: pretraining/files/sample_segmentation.csv
+  CACHE_DIR: null
+  DATA_PERCENTAGE: 1.0
+  TRAINING_PERCENTAGE: 0.9
+  PIN_MEMORY: False
+  NUM_WORKERS: 4
+TRAIN:
+  MAX_EPOCHS: 1000
+  BATCH_SIZE: 32
+  # Not stated by the paper. Validating/checkpointing every epoch (as the ASP config does with
+  # VAL_EVERY/SAVECKP_FREQ: 1) would mean 1000 full ViT+decoder checkpoints over this run --
+  # impractical. Every 10th epoch gives 100 points for the Figure 4(b) linear-probing sweep,
+  # which is what that plot actually needs.
+  VAL_EVERY: 10
+  SAVECKP_FREQ: 10
+  BASE_LR: 1.5e-3
+  MIN_LR: 1.5e-6
+  WEIGHT_DECAY: 0.005
+  BETA1: 0.9
+  BETA2: 0.95
+  # Paper: "linear warmup over the first 2.5% of steps" -- 2.5% of MAX_EPOCHS: 1000.
+  WARMUP_EPOCHS: 25
+  # Not stated by the paper -- inherited from the ASP config's GRAD_CLIP default.
+  GRAD_CLIP: 3.0
+  OPTIMIZER: AdamW
+  SCHEDULER: cosine
+VIT:
+  INPUT_SIZE: 128
+  PATCH_SIZE: 16
+  IN_CHANS: 1
+  DROPOUT_RATE: 0.
+  PATCH_EMBED: 'conv'
+  POS_EMBED: 'sincos'
+  SPATIAL_DIMS: 3
+  HIDDEN_SIZE: 768
+  NUM_LAYERS: 12
+  MLP_DIM: 3072
+  NUM_HEADS: 12
+  USE_BIAS: True
+  USE_FLASH_ATTN: False
+MAE:
+  # 75% masking -- vs. 0.4 used for the MAE half of ASP's stage-2 alternating epochs.
+  MASK_RATIO: 0.75
+WANDB:
+  WANDB_ENABLE: True
+  PROJECT: MAE_PRETRAIN
+  RUN: mae_pretrain
+LOG:
+  FILENAME: mae_pretrain
+SEED: 42
+OUTPUT: logs
+USE_AMP: true
