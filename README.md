@@ -1,60 +1,45 @@
 # AI4BrainMRI
 
-Clean rebuild of the codebase behind:
+Official code for:
 
 > **Comparative Study of Anatomical and Learned Features in AI Models for Structural Brain MRI**
-> Boyang Yu†, Miquel Lopez Escoriza†, Long Chen, Arjun V. Masurkar, Narges Razavian,
-> Carlos Fernandez-Granda (†equal contribution)
-> Center for Data Science / Courant Institute, NYU; NYU Grossman School of Medicine.
-> *Venue/year: TBD — this repo tracks a preprint draft (`AI_for_Structural_MRI (4).pdf`).*
+> Boyang Yu\*, Miquel Lopez Escoriza\*, Long Chen, Arjun V. Masurkar, Narges Razavian, Carlos Fernandez-Granda
+> (\*equal contribution)
+> Center for Data Science & Courant Institute of Mathematical Sciences, NYU; NYU Grossman School of Medicine
+> Preprint — venue TBD
 
-The paper compares three feature-extraction paradigms for 3D structural T1-weighted MRI
-(anatomical features, CNNs, pretrained ViTs) across seven clinical tasks and ~80,000 subjects,
-and proposes **ASP (Anatomy Segmentation Pretraining)**: pretrain a ViT with masked autoencoding,
-then add a lightweight bottleneck decoder and train it to segment 39 brain regions in alternating
-epochs with continued MAE reconstruction — injecting explicit anatomical structure into the
-pretrained embedding. ASP matches or beats plain MAE pretraining across diagnostic tasks and
-clearly outperforms it on biological age estimation.
+## Overview
 
-## Why this repo exists
+We comprehensively compare three feature-extraction paradigms for AI-based neuroimaging — anatomical
+surface/volume features, supervised CNNs, and self-supervised ViT foundation models — across seven
+clinical tasks and 19 public datasets covering over 80,000 subjects. A linear model on 161 FreeSurfer
+anatomical features matches the diagnostic performance of CNNs and pretrained ViTs, indicating that
+deep models on structural MRI tend to rediscover anatomical information rather than surpass it.
 
-The original implementation (`AI_FOR_STRUCTURAL_BRAIN_MRI/`, plus a separate `SEGMENTATION`
-pretraining repo) grew organically during experimentation: the same fine-tuning logic was
-duplicated across four locations, task behavior was switched by matching substrings inside
-checkpoint filenames, and ~1GB of SLURM logs ended up committed to git. This repo restructures
-just the ASP pipeline — the paper's proposed method and (per the results) its best-performing
-model — into one place organized so the code mirrors the paper's own structure instead of a pile
-of cluster job scripts. `downstream/` is a from-scratch rebuild; `pretraining/` is a structural
-+ self-containment port of the original training code (see "Structure" below for which is which,
-and why).
+Building on this observation, we propose **ASP (Anatomy Segmentation Pretraining)**: after standard
+masked-autoencoder (MAE) pretraining, a lightweight bottleneck decoder is added and trained to segment
+39 brain regions in epochs alternating with continued MAE reconstruction, explicitly injecting
+anatomical structure into the pretrained embedding. ASP matches or beats plain MAE pretraining across
+diagnostic tasks and clearly outperforms it on biological age estimation. See the paper for full
+results.
 
-## Structure
+This repository contains the ASP pipeline: pretraining (stage 1 MAE, stage 2 ASP) and its downstream
+application (fine-tuning, linear probing, evaluation) to clinical tasks.
+
+## Repository structure
 
 ```
 ai4brainmri/
-├── src/                    # shared library (ViT/MAE/segmentation-decoder models, dataloaders,
-│                            # DDP + optimizer/scheduler utils, utils_seg.py) -- used by
-│                            # pretraining/, hoisted to the top level rather than nested, so it
-│                            # isn't tied to one pipeline
-├── pretraining/             # stage 1 (mae_train.py, new code) + stage 2 (seg_mae_combined_train.py,
-│                            # ported as-is from the original SEGMENTATION repo: the alternating
-│                            # segmentation/MAE training loop) + linear-probing-during-pretraining
-│                            # monitoring (paper Figure 4b) -- see pretraining/README.md for what
-│                            # was copied vs. written from scratch vs. dropped
-└── downstream/              # downstream application of a pretrained ViT to clinical tasks:
-                             # train.py (fine-tune), linear_probe.py (frozen encoder + sklearn),
-                             # evaluate.py (final, bootstrap-CI'd, per-cohort metrics) -- see
-                             # downstream/README.md for the task list
+├── src/            # shared library: ViT/MAE/segmentation-decoder models, dataloaders,
+│                   # optimizer/scheduler utilities
+├── pretraining/    # stage 1 (MAE) and stage 2 (ASP) pretraining — see pretraining/README.md
+└── downstream/     # fine-tuning, linear probing, and evaluation on clinical tasks
+                    # — see downstream/README.md
 ```
 
-This mirrors the paper's Methods section ordering: pretraining stage first, then downstream
-application, with the three adaptation strategies the paper names (full fine-tuning, partial
-fine-tuning, linear probing) applied per task based on how much labeled data is available.
-
-`downstream/` is a from-scratch, single-GPU rewrite (see its README for what's simplified).
-`pretraining/` is the opposite: a structural port of the original multi-GPU/DDP code with the
-training logic untouched, since it needs to match what actually produced the published
-checkpoints. See `pretraining/README.md` for the stage-1 (plain MAE) gap that's still unfilled.
+This mirrors the paper's Methods section: pretraining first, then downstream application, with the
+three adaptation strategies (full fine-tuning, partial fine-tuning, linear probing) applied per task
+according to how much labeled data is available.
 
 ## Installation
 
@@ -63,23 +48,60 @@ conda env create -f environment.yml
 conda activate ai4brainmri
 ```
 
-Requires a preprocessed dataset (T1 MNI152 space, FreeSurfer-registered) and an ASP-pretrained
-checkpoint — neither is distributed with this repo. See `downstream/README.md` for the CSV
-format and `pretraining/README.md` for what produces a checkpoint.
+## Data
 
-## Status
+All experiments use 3D structural T1-weighted MRI, preprocessed with FreeSurfer's `recon-all` and
+co-registered to the MNI152 2009a Nonlinear Symmetric template (197×233×189, 1mm isotropic). Data used
+in the paper come from 19 publicly available repositories (UK Biobank, ADNI, NACC, AIBL, OASIS 1-4,
+MIRIAD, HCP, CamCAN, IXI, PPMI, OpenNeuro, EPISURG, UCSF-PDGM, BraTS, ATLAS), available to qualified
+researchers through application to the respective consortia. No new data was collected for this study.
 
-- [x] Downstream ASP pipeline, fine-tuning (`train.py`): AD diagnosis, healthy aging, epilepsy
-- [x] Downstream ASP pipeline, linear probing (`linear_probe.py`): glioma/IDH mutation (raw +
-      registered), Parkinson's, epilepsy
-- [x] Downstream ASP pipeline, final evaluation (`evaluate.py`): bootstrap-CI'd metrics, the
-      3-way pairwise AD-diagnosis macro-AUC, per-cohort stratified breakdown
-- [x] Pretraining, ASP stage (`seg_mae_combined_train.py`) — ported and self-contained, see
-      `pretraining/README.md`
-- [x] Pretraining, plain MAE stage (`mae_train.py`) — new code (no original to port, its own
-      external repo is inaccessible), see `pretraining/README.md`
-- [ ] LoRA adaptation (mentioned in the paper for some tasks; no implementation exists in the
-      original codebase either)
-- [ ] Segmentation downstream tasks (BraTS, ATLAS) — out of scope for this pass
-- [ ] MCI progression, NIFD (frontotemporal dementia) — deliberately dropped, see
-      `downstream/README.md`
+Preprocessed data is not distributed with this repository. See [`downstream/README.md`](downstream/README.md)
+for the expected CSV/manifest format.
+
+## Usage
+
+```bash
+# Pretraining — stage 1: masked-autoencoder pretraining
+python -m pretraining.mae_train --cfg pretraining/configs/mae_train.yaml
+
+# Pretraining — stage 2: Anatomy Segmentation Pretraining (alternating segmentation/MAE epochs)
+torchrun --nproc_per_node=1 --master_port=12001 -m pretraining.seg_mae_combined_train \
+    --cfg pretraining/configs/mae_seg_combined_train.yaml --local_rank 0
+
+# Downstream — fine-tune an ASP-pretrained encoder on a clinical task
+python -m downstream.train --cfg downstream/configs/finetune/ad_diagnosis_train.yaml
+
+# Downstream — final, paper-comparable evaluation (bootstrap CIs, per-cohort breakdown)
+python -m downstream.evaluate --cfg downstream/configs/eval/ad_diagnosis.yaml
+
+# Downstream — linear probing (frozen encoder + sklearn head)
+python -m downstream.linear_probe --cfg downstream/configs/linear_probe/glioma_registered.yaml
+```
+
+See [`pretraining/README.md`](pretraining/README.md) and [`downstream/README.md`](downstream/README.md)
+for the full task list, config reference, and SLURM job scripts.
+
+## Pretrained checkpoints
+
+Not yet released. This section will be updated with download links upon publication.
+
+## Citation
+
+```bibtex
+@article{yu2026comparative,
+  title   = {Comparative Study of Anatomical and Learned Features in AI Models for Structural Brain MRI},
+  author  = {Yu, Boyang and Lopez Escoriza, Miquel and Chen, Long and Masurkar, Arjun V. and Razavian, Narges and Fernandez-Granda, Carlos},
+  journal = {Preprint},
+  year    = {2026}
+}
+```
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+## Contact
+
+For questions about the paper, contact the corresponding author: Carlos Fernandez-Granda
+(cfgranda@cims.nyu.edu). For issues with this codebase, please open a GitHub issue.
