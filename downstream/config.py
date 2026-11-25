@@ -25,6 +25,10 @@ class DataConfig:
     # evaluate.py only: break results down by this column's unique values in addition to the
     # overall metric (e.g. "source_dataset" -> per-cohort AD-diagnosis AUCs). Empty = no breakdown.
     cohort_col: str = ""
+    # Participant identifier. When set, bootstrap CIs resample *participants* (all scans of a
+    # resampled participant are kept together) instead of individual scans, and evaluate.py
+    # writes it into the predictions CSV so that stats/compare_models.py can pair models.
+    subject_col: str = ""
 
     # --- linear_probe.py only, below ---
     # Some linear-probe tasks (Parkinson's, epilepsy) don't have their own image folder -- they
@@ -59,9 +63,22 @@ class ModelConfig:
     num_classes: int = 2
     # Freeze the whole encoder, only train the head (used together with linear_probe.py).
     lock_backbone: bool = False
-    # Freeze everything except the last transformer block + head ("partial fine-tuning" in the
-    # paper, used for the epilepsy task).
+    # Freeze everything except the last transformer block + head ("partial fine-tuning",
+    # an exploratory variant kept for completeness; not used for the paper's reported numbers).
     lock_last_block_only: bool = False
+    # How the pretrained encoder is adapted (paper Methods, "Downstream Application of Pretrained
+    # ViTs"):
+    #   "lora"    -- frozen encoder + trainable low-rank adapters in the attention layers + head.
+    #                The paper's default for AD diagnosis, epilepsy, brain age and segmentation.
+    #   "full"    -- every encoder parameter is updated (the paper's full-finetuning ablation).
+    #   "partial" -- same as lock_last_block_only=True.
+    #   "frozen"  -- same as lock_backbone=True (head only; prefer linear_probe.py for the
+    #                paper's sklearn linear probing).
+    adaptation: str = "full"
+    lora_rank: int = 8
+    lora_alpha: float = 16.0
+    lora_dropout: float = 0.0
+    lora_targets: list = field(default_factory=lambda: ["qkv"])
 
 
 @dataclass
@@ -76,6 +93,9 @@ class TrainConfig:
     # Alzheimer's label smoothing: healthy=0, AD=1, MCI=0.5 -> soft 2-way target.
     # See paper Methods, "Linear Models with Anatomical Features".
     smooth_mci_label: bool = False
+    # Stop if the validation loss has not improved for this many *validation passes*
+    # (0 = disabled, train for max_epochs and keep the best-validation checkpoint).
+    early_stopping_patience: int = 0
 
 
 @dataclass
@@ -83,6 +103,9 @@ class Config:
     task_name: str = "task"
     seed: int = 42
     roi: tuple = (128, 128, 128)
+    # evaluate.py / linear_probe.py: write per-scan predictions here (CSV). These files are the
+    # input of stats/compare_models.py (paired bootstrap differences between models).
+    predictions_csv: str = ""
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     train: TrainConfig = field(default_factory=TrainConfig)

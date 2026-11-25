@@ -8,10 +8,16 @@ data:
   test_csv: /path/to/data/ADNI_NACC_AIBL_OASIS1234_MIRIAD_diagnosis_test.csv
   cohort_col: source_dataset # per-cohort breakdown: ADNI, NACC, AIBL, OASIS1-4, MIRIAD
   batch_size: 64
+  subject_col: subject_id # participant-level bootstrap
+
+predictions_csv: results/predictions/ad_diagnosis_asp.csv # input to analysis/compare_models.py
 
 model:
   pretrained: checkpoints/ad_diagnosis.pt # output of ../finetune/ad_diagnosis_train.yaml
   num_classes: 2
+  adaptation: lora # must match the training config, so the LoRA adapters exist before loading
+  lora_rank: 8
+  lora_alpha: 16
 
 train:
   smooth_mci_label: true # selects the pairwise AD_CN/AD_MCI/MCI_CN macro-AUC in evaluate.py

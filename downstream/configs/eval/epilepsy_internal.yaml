@@ -5,10 +5,16 @@ task_name: epilepsy_internal_eval
 data:
   test_csv: /path/to/data/OpenNeuro_epilepsy_large_test.csv
   batch_size: 64
+  subject_col: subject_id # participant-level bootstrap
+
+predictions_csv: results/predictions/epilepsy_internal_asp.csv # input to analysis/compare_models.py
 
 model:
   pretrained: checkpoints/epilepsy.pt # output of ../finetune/epilepsy_train.yaml
   num_classes: 2
+  adaptation: lora # must match the training config, so the LoRA adapters exist before loading
+  lora_rank: 8
+  lora_alpha: 16
 
 train:
   smooth_mci_label: false

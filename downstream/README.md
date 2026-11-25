@@ -1,44 +1,32 @@
 # Downstream application of pretrained ViTs
 
-This follows the paper's "Downstream Application of Pretrained ViTs" methodology: a pretrained
-ViT encoder (produced by whatever stage lives under `pretraining/`) is adapted to a clinical task
-by attaching a small task-specific head and training with one of three strategies. Which strategy
-applies to which task is a property of the *task* (mainly: how much labeled data is available),
-not of the pretraining method — the same three strategies apply regardless of whether the
-encoder came from plain MAE, ASP, or anything else.
+This follows the paper's "Downstream Application of Pretrained ViTs" section. A pretrained ViT-B
+encoder, either ASP (`pretraining/configs/asp_paper.yaml`) or plain MAE, the paper's "Pretrained
+ViT" (`pretraining/configs/mae_train.yaml`), gets a small task head and is adapted to each clinical
+task. Both encoders go through exactly the same downstream configs; only `model.pretrained`
+changes.
 
-| Strategy | What's trained | Used for |
-|---|---|---|
-| **Full fine-tuning** | Entire encoder + head, jointly | Tasks with enough labeled data (e.g. AD diagnosis on ADNI, age estimation) |
-| **Partial fine-tuning** | Only the last transformer block + head | Small labeled datasets where full fine-tuning overfits (e.g. epilepsy) |
-| **Linear probing** | Head only (`sklearn` logistic regression / OLS on frozen embeddings) | Very small labeled datasets (e.g. tumor IDH mutation / glioma) |
+| Strategy | What is trained | Used for in the paper | Config |
+|---|---|---|---|
+| **LoRA** (reported results) | Low-rank adapters in the attention layers (`attn.qkv`) + task head; pretrained weights frozen | AD diagnosis, epilepsy, brain age, and the ViT encoders of both segmentation tasks | `model.adaptation: lora` (`configs/finetune/*_train.yaml`, `configs/segmentation/*_{asp,mae}.yaml`) |
+| **Full finetuning** (alternative strategy, Supplementary) | Every encoder parameter + head, same optimization settings as LoRA | Supplementary comparison with LoRA (AD, epilepsy, brain age) | `model.adaptation: full` (`configs/finetune/*_full_finetune.yaml`) |
+| **Linear probing** | `sklearn` logistic/linear regression on frozen CLS embeddings | Parkinson's disease, IDH mutation (small training sets); pretraining monitoring | `linear_probe.py`, `configs/linear_probe/` |
 
-Task-specific heads:
-- **Classification** (diagnosis tasks): `LayerNorm -> Linear -> num_classes` on the CLS-token
-  embedding, `CrossEntropyLoss`.
-- **Regression** (age/anatomical estimation): same head shape with `num_classes=1`, `MSELoss`.
+Task heads:
+- **Classification:** `LayerNorm -> Linear` on the CLS embedding. Alzheimer's diagnosis uses the soft
+  2-way target CN = 0, MCI = 0.5, AD = 1 (`train.smooth_mci_label: true`), which is equivalent to
+  binary cross-entropy on soft labels.
+- **Regression (brain age):** the same head with `num_classes: 1` and `MSELoss`.
+- **Segmentation:** a UNETR decoder fed by the hidden states of blocks 3, 6, 9 and 12
+  (`segmentation/model.py`).
 
-Training/inference augmentation, for both strategies that touch the encoder: random-crop 128³ +
-random intensity shift at train time; center-crop 128³ at inference for classification/regression
-tasks (full-volume segmentation tasks use sliding-window inference instead, out of scope here —
-see caveats below).
+Augmentation: random 128³ crop and intensity shift during training. At test time, a center 128³
+crop for classification/regression, or sliding-window inference over the full volume for segmentation.
 
-Downstream application of an **ASP**-pretrained encoder (Anatomy Segmentation Pretraining, this
-paper's proposed method) is currently the only pipeline implemented here — see the rest of this
-file. A future plain-MAE downstream pipeline (no segmentation auxiliary task) would reuse the same
-head/strategy concepts; most of the model/data/engine code below is not actually ASP-specific and
-could be shared once a second pipeline exists.
-
-## Explicitly out of scope for now
-
-- Segmentation downstream tasks (BraTS tumor segmentation, ATLAS stroke lesion segmentation) —
-  these require a UNETR-style decoder and sliding-window inference, neither of which the ASP
-  checkpoint's downstream tasks in this repo use.
-- LoRA adaptation — mentioned in the paper for some diagnostic tasks/age estimation, but no
-  working LoRA implementation was found anywhere in the original codebase this repo replaces, so
-  it isn't reproduced here.
-- Linear models on FreeSurfer anatomical features, and the CNN (ResNet/U-Net) baselines — these
-  are comparison points in the paper, not part of the ViT pipeline.
+Evaluation (`evaluate.py`, `linear_probe.py`, `segmentation/train_segmentation.py`) reports
+bootstrap 95% CIs. When `data.subject_col` is set, participants are resampled (all scans of a
+participant together), and per-scan predictions are written to `predictions_csv` for the paired
+model comparison in `analysis/compare_models.py`.
 
 ---
 
@@ -53,7 +41,7 @@ data, which strategy variant) is a config file, not a new script:
 
 | Script | Responsibility | Configs live in |
 |---|---|---|
-| `train.py` | Fine-tune (full or partial), pick the best checkpoint by validation loss | `configs/finetune/` |
+| `train.py` | Adapt the encoder (LoRA, full or partial finetuning), pick the best checkpoint by validation loss | `configs/finetune/` |
 | `linear_probe.py` | Frozen encoder + `sklearn` linear model, for small-data tasks | `configs/linear_probe/` |
 | `evaluate.py` | The *final*, paper-comparable numbers for a fine-tuned checkpoint: bootstrap CIs, per-cohort breakdown, the 3-way pairwise AD-diagnosis AUC | `configs/eval/` |
 
@@ -70,7 +58,9 @@ repo applied bootstrap CIs uniformly regardless of adaptation strategy.
 | File | Role |
 |---|---|
 | `config.py` | Dataclass config + YAML loader (`--set section.field=value` CLI overrides) |
-| `model.py` | ViT encoder, classification/regression head, checkpoint loading |
+| `model.py` | ViT encoder, classification/regression head, checkpoint loading, adaptation (`prepare_encoder`) |
+| `lora.py` | LoRA adapters for the attention layers |
+| `segmentation/` | UNETR (pretrained ViT + LoRA, or from scratch) and U-Net, BraTS/ATLAS training and Dice evaluation |
 | `data.py` | CSV dataset + train/val/test transforms, shared by all three scripts |
 | `engine.py` | Train/validate loop, loss, optimizer, LR schedule — used by `train.py` only |
 | `metrics.py` | Bootstrap CI, the 3-way pairwise AD-diagnosis macro-AUC, regression metrics — used by `evaluate.py` and `linear_probe.py` |
@@ -103,9 +93,9 @@ the full explanation):
 
 | Task | Strategy | Train config | Eval config(s) |
 |---|---|---|---|
-| AD diagnosis | Full fine-tuning | `ad_diagnosis_train.yaml` | `ad_diagnosis.yaml` — broad multi-cohort test set (ADNI internal + NACC/AIBL/OASIS1-4/MIRIAD external), per-cohort breakdown via `data.cohort_col: source_dataset` |
-| Healthy brain aging | Full fine-tuning (regression) | `healthy_aging_train.yaml` | `healthy_aging.yaml` (internal UK Biobank), `healthy_aging_external.yaml` (external NACC, healthy subjects only) |
-| Epilepsy detection | Partial fine-tuning (last block only) | `epilepsy_train.yaml` | `epilepsy_internal.yaml` (OpenNeuro), `epilepsy_episurg.yaml` (external EPISURG) |
+| AD diagnosis | LoRA (FF variant: `ad_diagnosis_train_full_finetune.yaml`) | `ad_diagnosis_train.yaml` | `ad_diagnosis.yaml` — broad multi-cohort test set (ADNI internal + NACC/AIBL/OASIS1-4/MIRIAD external), per-cohort breakdown via `data.cohort_col: source_dataset` |
+| Brain age | LoRA, regression (FF variant: `healthy_aging_train_full_finetune.yaml`) | `healthy_aging_train.yaml` | `healthy_aging.yaml` (internal UK Biobank), `healthy_aging_external.yaml` (external NACC, healthy subjects only) |
+| Epilepsy detection | LoRA (FF variant: `epilepsy_train_full_finetune.yaml`) | `epilepsy_train.yaml` | `epilepsy_internal.yaml` (OpenNeuro), `epilepsy_episurg.yaml` (external EPISURG) |
 
 Each eval config's `model.pretrained` points at the checkpoint its matching train config saved
 (`checkpoints/<task>.pt`) and is loaded with `model.py::load_finetuned_checkpoint` — `evaluate.py`
@@ -219,9 +209,9 @@ This pipeline intentionally does not reproduce a few things from the original
 - **Single-GPU only** — no DDP/`torchrun`/`DistributedSampler`/`SyncBatchNorm`.
 - **No multi-patch aggregation** — every ASP downstream config used a single 128³ crop
   (`NUM_PATCHES: 1`), so the old patch-reshape/mean-or-concat-aggregation logic is dropped.
-- **No UNETR/segmentation decoder** — none of the tasks above are voxel segmentation tasks.
-- **No LoRA** — referenced by a leftover config filename in the original repo, but no LoRA
-  implementation existed anywhere in that codebase either.
+- **Segmentation lives in `segmentation/`**, separate from the classification/regression
+  scripts, and LoRA is implemented in `lora.py` (`model.adaptation: lora`), the strategy behind
+  the paper's reported results.
 - **No MCI progression, no NIFD** — see the "Not implemented" notes above.
 - **The classifier head's LR floor** scales with its 100x-higher base LR (one shared cosine
   schedule across both param groups) rather than sharing the encoder's absolute LR floor — see

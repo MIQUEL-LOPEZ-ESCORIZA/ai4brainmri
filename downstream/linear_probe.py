@@ -86,12 +86,16 @@ def load_split(config: Config, encoder, device: torch.device, pool: dict | None,
     return x, y, groups
 
 
-def score(y_true: np.ndarray, y_pred: np.ndarray, groups, num_classes: int) -> dict:
+def score(y_true: np.ndarray, y_pred: np.ndarray, groups, num_classes: int, subjects=None) -> dict:
+    """Optionally average predictions per `groups` (e.g. T1 + T1-CE of one patient) first.
+    `subjects` (participant IDs, one per scan) makes the bootstrap participant-level when no
+    averaging is done."""
     if groups is not None:
         grouped = pd.DataFrame({"y": y_true, "pred": y_pred}).groupby(groups.to_numpy()).mean()
         y_true, y_pred = grouped["y"].to_numpy(), grouped["pred"].to_numpy()
+        subjects = None  # already one row per group
     metric_fn = mean_absolute_error if num_classes == 1 else roc_auc_score
-    return bootstrap_ci(metric_fn, y_true, y_pred)
+    return bootstrap_ci(metric_fn, y_true, y_pred, groups=subjects)
 
 
 def main() -> None:
@@ -118,9 +122,20 @@ def main() -> None:
         model = LogisticRegression(max_iter=1000).fit(train_x, train_y)
         preds = model.predict_proba(test_x)[:, 1]
 
-    result = score(test_y, preds, test_groups, config.model.num_classes)
+    test_df = pd.read_csv(config.data.test_csv)
+    subjects = test_df[config.data.subject_col].to_numpy() if config.data.subject_col else None
+    result = score(test_y, preds, test_groups, config.model.num_classes, subjects)
     metric_name = "MAE" if config.model.num_classes == 1 else "AUROC"
     print(f"test {metric_name}: {format_result(result)}")
+
+    if config.predictions_csv:
+        key = config.data.join_col if config.data.pool_csv else config.data.img_path_col
+        out = pd.DataFrame({"scan": test_df[key], "label": test_y, "prediction": preds})
+        for col in (config.data.subject_col, config.data.group_col, config.data.cohort_col):
+            if col and col not in out:
+                out[col] = test_df[col].to_numpy()
+        out.to_csv(config.predictions_csv, index=False)
+        print(f"Wrote per-scan predictions to {config.predictions_csv}")
 
 
 if __name__ == "__main__":

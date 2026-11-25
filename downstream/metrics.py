@@ -30,15 +30,37 @@ _AD_DIAGNOSIS_PAIRS = {
 }
 
 
-def bootstrap_ci(metric_fn, y_true, y_pred, n_bootstrap: int = 1000, ci: float = 0.95, seed: int = 42) -> dict:
+def bootstrap_indices(n: int, rng: np.random.RandomState, groups=None) -> np.ndarray:
+    """One bootstrap resample of row indices. With `groups` (e.g. participant IDs), whole groups
+    are resampled with replacement and all their rows kept (cluster bootstrap), so repeated scans
+    of one participant never count as independent observations."""
+    if groups is None:
+        return rng.randint(0, n, n)
+    groups = np.asarray(groups)
+    unique, inverse = np.unique(groups, return_inverse=True)
+    rows_by_group = [np.flatnonzero(inverse == g) for g in range(len(unique))]
+    picked = rng.randint(0, len(unique), len(unique))
+    return np.concatenate([rows_by_group[g] for g in picked])
+
+
+def bootstrap_ci(metric_fn, y_true, y_pred, n_bootstrap: int = 1000, ci: float = 0.95, seed: int = 42,
+                 groups=None) -> dict:
     """`metric_fn(y_true, y_pred) -> float`, resampled `n_bootstrap` times with replacement.
     Mirrors the original repo's `add_bootstrap_CI` (`notebooks/confidence_interval.ipynb`,
     `notebooks/healthy_aging_evaluation.ipynb`): percentile-method CI, same defaults.
+    Pass `groups` (participant IDs) for a participant-level bootstrap. Resamples where the metric
+    is undefined (e.g. a single class for AUROC) are skipped.
     """
     y_true, y_pred = np.asarray(y_true), np.asarray(y_pred)
     rng = np.random.RandomState(seed)
     n = len(y_true)
-    stats = [metric_fn(y_true[idx], y_pred[idx]) for idx in (rng.randint(0, n, n) for _ in range(n_bootstrap))]
+    stats = []
+    for _ in range(n_bootstrap):
+        idx = bootstrap_indices(n, rng, groups)
+        try:
+            stats.append(metric_fn(y_true[idx], y_pred[idx]))
+        except ValueError:
+            continue
     return {
         "value": metric_fn(y_true, y_pred),
         "ci_lower": np.percentile(stats, (1 - ci) / 2 * 100),
@@ -46,7 +68,7 @@ def bootstrap_ci(metric_fn, y_true, y_pred, n_bootstrap: int = 1000, ci: float =
     }
 
 
-def pairwise_ad_aucs(raw_label, prob_ad, n_bootstrap: int = 1000) -> dict:
+def pairwise_ad_aucs(raw_label, prob_ad, n_bootstrap: int = 1000, groups=None) -> dict:
     """Three pairwise AD-diagnosis AUCs (AD-vs-CN, AD-vs-MCI, MCI-vs-CN) plus their macro
     average, each with a bootstrap CI. `raw_label` is 0 (CN) / 0.5 (MCI) / 1 (AD);
     `prob_ad` is the predicted P(AD). See the module docstring for how this differs from the
@@ -57,7 +79,8 @@ def pairwise_ad_aucs(raw_label, prob_ad, n_bootstrap: int = 1000) -> dict:
     for name, (pos, neg) in _AD_DIAGNOSIS_PAIRS.items():
         mask = (raw_label == pos) | (raw_label == neg)
         y_true = (raw_label[mask] == pos).astype(int)
-        results[name] = bootstrap_ci(roc_auc_score, y_true, prob_ad[mask], n_bootstrap)
+        g = None if groups is None else np.asarray(groups)[mask]
+        results[name] = bootstrap_ci(roc_auc_score, y_true, prob_ad[mask], n_bootstrap, groups=g)
     results["macro"] = {
         "value": float(np.mean([results[k]["value"] for k in _AD_DIAGNOSIS_PAIRS])),
         "ci_lower": float(np.mean([results[k]["ci_lower"] for k in _AD_DIAGNOSIS_PAIRS])),
@@ -66,14 +89,14 @@ def pairwise_ad_aucs(raw_label, prob_ad, n_bootstrap: int = 1000) -> dict:
     return results
 
 
-def regression_metrics(y_true, y_pred, n_bootstrap: int = 1000) -> dict:
+def regression_metrics(y_true, y_pred, n_bootstrap: int = 1000, groups=None) -> dict:
     """Pearson correlation + MAE + MSE, each with a bootstrap CI -- matches
     `notebooks/healthy_aging_evaluation.ipynb` (used for age estimation)."""
     pearson_r = lambda a, b: float(np.corrcoef(a, b)[0, 1])
     return {
-        "pearson_r": bootstrap_ci(pearson_r, y_true, y_pred, n_bootstrap),
-        "mae": bootstrap_ci(mean_absolute_error, y_true, y_pred, n_bootstrap),
-        "mse": bootstrap_ci(mean_squared_error, y_true, y_pred, n_bootstrap),
+        "pearson_r": bootstrap_ci(pearson_r, y_true, y_pred, n_bootstrap, groups=groups),
+        "mae": bootstrap_ci(mean_absolute_error, y_true, y_pred, n_bootstrap, groups=groups),
+        "mse": bootstrap_ci(mean_squared_error, y_true, y_pred, n_bootstrap, groups=groups),
     }
 
 

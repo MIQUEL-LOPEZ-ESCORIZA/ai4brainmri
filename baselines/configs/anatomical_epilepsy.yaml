@@ -1,0 +1,9 @@
+# Anatomical baseline, epilepsy (FCD II) vs. healthy controls (OpenNeuro ds004199).
+task: classification
+model: linear
+features: baselines/anatomical/features_paper.txt
+train_csv: /path/to/data/features/OpenNeuro_train_anatomical.csv
+test_csv: /path/to/data/features/OpenNeuro_test_anatomical.csv
+label_col: epilepsy_label
+subject_col: subject_id
+predictions_csv: results/predictions/epilepsy_anatomical.csv

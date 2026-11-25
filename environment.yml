@@ -9,7 +9,7 @@ dependencies:
   - pip
   - pip:
       - torch==2.5.1
-      - torchvision==0.17.0
+      - torchvision==0.20.1  # must match torch 2.5.1 (0.17 pairs with torch 2.2)
       - monai==1.3.0
       - einops==0.7.0  # transitive MONAI dependency (SABlock), not always pulled in automatically
       - torchmetrics==1.3.1

@@ -1,0 +1,59 @@
+# ASP ablation: ASP training from a randomly initialized encoder (no stage-1 MAE). See asp_paper.yaml.
+MODEL:
+  SSL_PRETRAINED: ''
+  MAE_PRETRAINED: ''
+  SEG_PRETRAINED: ''
+  CHECKPOINT_DIR: checkpoints/asp_from_scratch
+DATA:
+  TRAIN_CSV_PATH: /path/to/data/manifests/pretraining.csv   # preprocessing/build_manifest.py
+  CACHE_DIR: null
+  DATA_PERCENTAGE: 1.0
+  # 90% of pretraining participants for training; the UKBB holdout (10% of UKBB participants)
+  # must not be in TRAIN_CSV_PATH at all -- it is the internal brain-age test cohort.
+  TRAINING_PERCENTAGE: 0.9
+  GROUPING: 'global'          # the 39 grouped regions (files/selected_brain_regions.csv)
+  PIN_MEMORY: False
+  NUM_WORKERS: 4
+TRAIN:
+  MAX_EPOCHS: 400
+  BATCH_SIZE: 16
+  VAL_EVERY: 1
+  SAVECKP_FREQ: 10
+  BASE_LR: 5.0e-4
+  MIN_LR: 5.0e-7
+  BETA1: 0.9
+  BETA2: 0.95
+  WEIGHT_DECAY: 0.04
+  PER_WARMUP: 0.0125
+  WARMUP_EPOCHS: 5
+  GRAD_CLIP: 3.0
+  OPTIMIZER: AdamW
+  SCHEDULER: cosine
+  FREEZE_ENCODER_EPOCHS: 0  # nothing to preserve without a pretrained encoder
+  ALTERNATE_MAE: True
+VIT:
+  INPUT_SIZE: 128
+  PATCH_SIZE: 16
+  IN_CHANS: 1
+  DROPOUT_RATE: 0.
+  PATCH_EMBED: 'conv'
+  POS_EMBED: 'sincos'
+  SPATIAL_DIMS: 3
+  HIDDEN_SIZE: 768
+  NUM_LAYERS: 12
+  MLP_DIM: 3072
+  NUM_HEADS: 12
+  USE_BIAS: True
+  USE_FLASH_ATTN: False
+  SMOOTH_MCI_LABEL: True
+MAE:
+  MASK_RATIO: 0.4             # MAE epochs inside ASP (value from the original ASP code; stage 1 uses 0.75)
+WANDB:
+  WANDB_ENABLE: False
+  PROJECT: ASP
+  RUN: asp_from_scratch
+LOG:
+  FILENAME: asp_from_scratch
+SEED: 42
+OUTPUT: logs
+USE_AMP: true

@@ -1,0 +1,18 @@
+# ResNet-18 baseline, IDH mutation (UCSF-PDGM; T1 and T1-CE volumes are separate single-channel samples).
+task: classification
+arch: resnet18
+roi: [128, 128, 128]
+batch_size: 16
+max_epochs: 60
+lr: 0.01                       # SGD
+momentum: 0.0                  # not stated in the paper; plain SGD
+early_stopping_patience: 10    # on validation loss
+train_csv: /path/to/data/UCSF_PDGM_train.csv
+val_csv: /path/to/data/UCSF_PDGM_val.csv
+test_csv: /path/to/data/UCSF_PDGM_test.csv
+img_path_col: img_path_T1_mni152
+label_col: idh_mutated
+subject_col: subject_id
+cohort_col: ""
+save_path: checkpoints/cnn_idh.pt
+predictions_csv: results/predictions/idh_cnn.csv

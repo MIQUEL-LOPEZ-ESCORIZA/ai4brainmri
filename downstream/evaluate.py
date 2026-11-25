@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -30,7 +31,7 @@ import torch
 from downstream.config import Config, load_config
 from downstream.data import build_loader
 from downstream.metrics import bootstrap_ci, format_result, pairwise_ad_aucs, regression_metrics
-from downstream.model import build_model, load_finetuned_checkpoint
+from downstream.model import build_model, load_finetuned_checkpoint, prepare_encoder
 from sklearn.metrics import roc_auc_score
 
 
@@ -65,24 +66,24 @@ def predict(encoder, head, loader, config: Config, device: torch.device) -> tupl
     return np.concatenate(all_labels), np.concatenate(all_preds)
 
 
-def report(name: str, raw_labels: np.ndarray, preds: np.ndarray, config: Config) -> None:
+def report(name: str, raw_labels: np.ndarray, preds: np.ndarray, config: Config, groups=None) -> None:
     if len(raw_labels) < 2:
         print(f"[{name}] n={len(raw_labels)} -- too few samples to score")
         return
 
     if config.model.num_classes == 1:
-        result = regression_metrics(raw_labels, preds)
+        result = regression_metrics(raw_labels, preds, groups=groups)
         print(
             f"[{name}] n={len(raw_labels)}  "
             f"pearson_r={format_result(result['pearson_r'])}  "
             f"MAE={format_result(result['mae'])}  MSE={format_result(result['mse'])}"
         )
     elif config.train.smooth_mci_label:
-        result = pairwise_ad_aucs(raw_labels, preds)
+        result = pairwise_ad_aucs(raw_labels, preds, groups=groups)
         parts = ", ".join(f"{k}={format_result(v)}" for k, v in result.items())
         print(f"[{name}] n={len(raw_labels)}  {parts}")
     else:
-        result = bootstrap_ci(roc_auc_score, raw_labels, preds)
+        result = bootstrap_ci(roc_auc_score, raw_labels, preds, groups=groups)
         print(f"[{name}] n={len(raw_labels)}  AUROC={format_result(result)}")
 
 
@@ -93,20 +94,37 @@ def main() -> None:
     print(f"[{config.task_name}] device={device}")
 
     encoder, head = build_model(config)
+    # A LoRA checkpoint contains adapter parameters, so the adapters must exist before loading.
+    if config.model.adaptation == "lora":
+        prepare_encoder(encoder, config)
     load_finetuned_checkpoint(encoder, head, config.model.pretrained)
     encoder, head = encoder.to(device), head.to(device)
 
     loader = build_loader(config, config.data.test_csv, "test")
     raw_labels, preds = predict(encoder, head, loader, config, device)
 
-    report("overall", raw_labels, preds, config)
+    test_df = pd.read_csv(config.data.test_csv)
+    groups = test_df[config.data.subject_col].to_numpy() if config.data.subject_col else None
+    report("overall", raw_labels, preds, config, groups)
+
+    if config.predictions_csv:
+        df = pd.read_csv(config.data.test_csv)
+        out = pd.DataFrame({"label": raw_labels, "prediction": preds})
+        for col in (config.data.subject_col, config.data.cohort_col):
+            if col:
+                out[col] = df[col].to_numpy()
+        out.insert(0, "scan", df[config.data.img_path_col].to_numpy())
+        Path(config.predictions_csv).parent.mkdir(parents=True, exist_ok=True)
+        out.to_csv(config.predictions_csv, index=False)
+        print(f"Wrote per-scan predictions to {config.predictions_csv}")
 
     if config.data.cohort_col:
         df = pd.read_csv(config.data.test_csv)
         assert len(df) == len(raw_labels), "test CSV row count changed between load and inference"
         for cohort in sorted(df[config.data.cohort_col].dropna().unique()):
             mask = (df[config.data.cohort_col] == cohort).to_numpy()
-            report(str(cohort), raw_labels[mask], preds[mask], config)
+            report(str(cohort), raw_labels[mask], preds[mask], config,
+                   None if groups is None else groups[mask])
 
 
 if __name__ == "__main__":

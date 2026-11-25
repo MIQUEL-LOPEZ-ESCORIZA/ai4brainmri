@@ -1,15 +1,23 @@
 # Final evaluation of the epilepsy_train.yaml checkpoint on the external EPISURG cohort
-# (independent data source, per paper Methods "Diagnostics of epilepsy"). Reports bootstrap-CI'd
-# AUROC -- plain binary task, no pairwise AD/MCI/CN breakdown.
+# (independent data source, per paper Methods "Diagnostics of epilepsy"). EPISURG contains only
+# epilepsy patients (n=268 preoperative T1 scans), so an AUROC needs negatives: the test CSV
+# combines all EPISURG patients (label 1) with the healthy controls of the held-out OpenNeuro test
+# half (label 0), none of whom were used for training. Reports bootstrap-CI'd AUROC.
 task_name: epilepsy_episurg_eval
 
 data:
   test_csv: /path/to/data/OpenNeuro_epilepsy_EPISURG_large_test_external.csv
   batch_size: 64
+  subject_col: subject_id # participant-level bootstrap
+
+predictions_csv: results/predictions/epilepsy_episurg_asp.csv # input to analysis/compare_models.py
 
 model:
   pretrained: checkpoints/epilepsy.pt # output of ../finetune/epilepsy_train.yaml
   num_classes: 2
+  adaptation: lora # must match the training config, so the LoRA adapters exist before loading
+  lora_rank: 8
+  lora_alpha: 16
 
 train:
   smooth_mci_label: false

@@ -1,0 +1,12 @@
+# Anatomical baseline, brain age (chronological-age regression, OLS).
+# Train: healthy UKBB + HCP + CamCAN + IXI (UKBB holdout excluded). Test: UKBB holdout (internal),
+# healthy NACC and ADNI participants under 90 (external).
+task: regression
+model: linear
+features: baselines/anatomical/features_paper.txt
+train_csv: /path/to/data/features/brain_age_train_anatomical.csv
+test_csv: /path/to/data/features/brain_age_test_all_anatomical.csv
+label_col: age
+subject_col: subject_id
+cohort_col: source_dataset
+predictions_csv: results/predictions/brain_age_anatomical.csv

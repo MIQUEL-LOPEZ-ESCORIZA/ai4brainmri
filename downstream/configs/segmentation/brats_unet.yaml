@@ -1,0 +1,21 @@
+# 3D U-Net trained from scratch (baseline).
+# BraTS 2023 Adult Glioma, whole tumor (labels 1+2+3). Participant-level split: 1,000 train /
+# 251 test participants. Native T1 and T1-CE are separate single-channel training samples; the
+# test CSV lists only the T1-CE scans. Set train_fraction: 0.1 for the 10%-training-data experiment.
+kind: unet
+roi: [128, 128, 128]
+train_csv: /path/to/data/BraTS2023_train.csv
+val_csv: /path/to/data/BraTS2023_val.csv
+test_csv: /path/to/data/BraTS2023_test.csv
+img_path_col: img_path_T1
+mask_path_col: mask_path
+subject_col: subject_id
+binarize_label: true
+train_fraction: 1.0
+batch_size: 2
+max_epochs: 150
+val_every: 10
+lr: 1.0e-4
+weight_decay: 1.0e-5
+save_path: checkpoints/seg_brats_unet.pt
+predictions_csv: results/predictions/seg_brats_unet.csv

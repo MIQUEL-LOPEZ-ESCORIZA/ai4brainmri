@@ -11,6 +11,10 @@ _C.MODEL = CN()
 _C.MODEL.PRETRAINED = ''
 _C.MODEL.SSL_PRETRAINED = ''  # New key based on your YAML
 _C.MODEL.CHECKPOINT_DIR = ''  # New key based on your YAML
+_C.MODEL.MAE_PRETRAINED = ''
+# Checkpoint of a frozen-encoder (decoder-only) ASP run to initialize the segmentation model from.
+# Leave empty when the frozen phase runs inside seg_mae_combined_train.py (TRAIN.FREEZE_ENCODER_EPOCHS).
+_C.MODEL.SEG_PRETRAINED = ''
 
 # -----------------------------------------------------------------------------
 # Data Settings
@@ -47,6 +51,9 @@ _C.TRAIN.WARMUP_EPOCHS = 1
 _C.TRAIN.GRAD_CLIP = 3.0
 _C.TRAIN.OPTIMIZER = 'AdamW'
 _C.TRAIN.SCHEDULER = 'cosine'
+# ASP phases (seg_mae_combined_train.py). Defaults reproduce the original loop exactly.
+_C.TRAIN.FREEZE_ENCODER_EPOCHS = 0  # epochs of decoder-only training on the frozen MAE encoder
+_C.TRAIN.ALTERNATE_MAE = True       # alternate segmentation and MAE epochs after the frozen phase
 
 # -----------------------------------------------------------------------------
 # Vision Transformer (ViT) Settings

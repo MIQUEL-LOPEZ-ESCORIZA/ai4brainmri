@@ -1,4 +1,5 @@
-"""CLI entry point: full or partial fine-tuning of an ASP-pretrained ViT on a downstream task.
+"""CLI entry point: adapt a pretrained ViT (ASP or plain MAE) to a downstream task with LoRA
+(the paper's default), full fine-tuning (ablation) or partial fine-tuning.
 
 Only handles training + checkpoint selection (best validation loss). It does not report final
 metrics -- see evaluate.py for that (a separate script, on purpose: this loop's own validation
@@ -29,7 +30,7 @@ from downstream.engine import (
     scale_lr_for_batch_size,
     train_one_epoch,
 )
-from downstream.model import build_model, freeze_all_but_last_block, freeze_backbone, load_asp_checkpoint
+from downstream.model import build_model, load_asp_checkpoint, prepare_encoder
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,12 +64,8 @@ def main() -> None:
     if config.model.pretrained:
         result = load_asp_checkpoint(encoder, config.model.pretrained)
         print(f"Loaded ASP checkpoint {config.model.pretrained}: {result}")
+    print(f"Adaptation: {prepare_encoder(encoder, config)}")
     encoder, head = encoder.to(device), head.to(device)
-
-    if config.model.lock_backbone:
-        freeze_backbone(encoder)
-    elif config.model.lock_last_block_only:
-        freeze_all_but_last_block(encoder)
 
     criterion = build_criterion(config)
     metrics = build_metrics(config, device)
@@ -89,6 +86,7 @@ def main() -> None:
 
     best_val_loss = float("inf")
     best_state = None
+    passes_without_improvement = 0
     for epoch in range(config.train.max_epochs):
         train_loss = train_one_epoch(
             encoder, head, train_loader, optimizer, scheduler, criterion, metrics, config, device
@@ -101,10 +99,19 @@ def main() -> None:
             print(f"  val_loss={val_loss:.4f}  {safe_compute(metrics)}")
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
+                passes_without_improvement = 0
                 best_state = {
                     "encoder": copy.deepcopy(encoder.state_dict()),
                     "head": copy.deepcopy(head.state_dict()),
+                    "epoch": epoch + 1,
+                    "adaptation": config.model.adaptation,
                 }
+            else:
+                passes_without_improvement += 1
+                patience = config.train.early_stopping_patience
+                if patience and passes_without_improvement >= patience:
+                    print(f"Early stopping: no improvement in {patience} validation passes")
+                    break
 
     if best_state is None:
         raise RuntimeError("no validation pass ran -- check train.max_epochs and train.val_every")

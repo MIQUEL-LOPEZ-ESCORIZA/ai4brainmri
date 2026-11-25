@@ -1,7 +1,7 @@
-# Partial fine-tuning (only the last transformer block + head) on OpenNeuro epilepsy data --
-# the training cohort is small (n=82), so full fine-tuning overfits. Matches paper Methods:
-# "partial finetuning, updating only the final attention block." Produces the checkpoint that
-# ../eval/epilepsy_internal.yaml and ../eval/epilepsy_episurg.yaml score.
+# LoRA adaptation (the paper's reported strategy) of the ASP-pretrained encoder for epilepsy
+# (FCD II) vs. healthy controls, OpenNeuro ds004199. For the plain-MAE "Pretrained ViT", override
+# model.pretrained as in ad_diagnosis_train.yaml. Scored by ../eval/epilepsy_internal.yaml and
+# ../eval/epilepsy_episurg.yaml.
 task_name: epilepsy_train
 
 data:
@@ -16,12 +16,14 @@ data:
 model:
   pretrained: /path/to/checkpoints/asp_pretrained.pth
   num_classes: 2
-  lock_last_block_only: true
+  adaptation: lora # paper default; see the *_full_finetune.yaml variant for the ablation
+  lora_rank: 8      # TODO(authors): confirm the rank/alpha used for the paper runs
+  lora_alpha: 16
   save_path: checkpoints/epilepsy.pt
 
 train:
-  max_epochs: 10 # short schedule: small dataset, partial fine-tuning converges fast
-  val_every: 1
+  max_epochs: 150 # paper Methods: LoRA trained for 150 epochs with AdamW
+  val_every: 2
   base_lr: 1.5e-4
   weight_decay: 0.005
   smooth_mci_label: false

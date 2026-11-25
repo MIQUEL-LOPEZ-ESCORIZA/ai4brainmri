@@ -1,0 +1,9 @@
+# Anatomical baseline, Parkinson's disease vs. healthy controls (PPMI, participant-level split).
+task: classification
+model: linear
+features: baselines/anatomical/features_paper.txt
+train_csv: /path/to/data/features/PPMI_train_anatomical.csv
+test_csv: /path/to/data/features/PPMI_test_anatomical.csv
+label_col: pd_label
+subject_col: subject_id
+predictions_csv: results/predictions/parkinsons_anatomical.csv

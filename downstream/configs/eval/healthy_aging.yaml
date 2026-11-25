@@ -6,7 +6,13 @@ task_name: healthy_aging_eval
 data:
   test_csv: /path/to/data/healthy_aging_test.csv
   batch_size: 64
+  subject_col: subject_id # participant-level bootstrap
+
+predictions_csv: results/predictions/healthy_aging_asp.csv # input to analysis/compare_models.py
 
 model:
   pretrained: checkpoints/healthy_aging.pt # output of ../finetune/healthy_aging_train.yaml
   num_classes: 1
+  adaptation: lora # must match the training config, so the LoRA adapters exist before loading
+  lora_rank: 8
+  lora_alpha: 16

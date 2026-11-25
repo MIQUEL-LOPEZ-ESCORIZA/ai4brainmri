@@ -1,0 +1,15 @@
+# Anatomical baseline, Alzheimer's diagnosis. Train: ADNI (participant-level split).
+# Test: ADNI internal + NACC, AIBL, OASIS-1..4, MIRIAD external (cohort_col breaks results down).
+# Labels: CN=0, MCI=0.5, AD=1 (soft labels, log loss). Feature tables come from
+# baselines/anatomical/extract_freesurfer_features.py.
+task: soft_classification
+model: linear            # "random_forest" for the Supplementary linear-vs-nonlinear comparison
+features: baselines/anatomical/features_paper.txt
+train_csv: /path/to/data/features/ADNI_train_anatomical.csv
+test_csv: /path/to/data/features/AD_test_all_cohorts_anatomical.csv
+label_col: pred_label
+subject_col: subject_id
+cohort_col: source_dataset
+scan_col: img_path_T1_mni152
+train_fraction: 1.0      # 0.1 / 0.3 for the Supplementary training-size experiment
+predictions_csv: results/predictions/ad_anatomical.csv

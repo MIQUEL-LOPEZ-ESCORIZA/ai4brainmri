@@ -1,0 +1,19 @@
+# 3D U-Net trained from scratch (baseline).
+# ATLAS R2.0 stroke lesions. 655 T1w scans (one per participant) from 33 sites; split by
+# site: 21 training sites (355 scans) / 12 test sites (300 scans), so no site is in both sets.
+kind: unet
+roi: [128, 128, 128]
+train_csv: /path/to/data/ATLAS_R2_train.csv
+val_csv: /path/to/data/ATLAS_R2_val.csv
+test_csv: /path/to/data/ATLAS_R2_test.csv
+img_path_col: img_path_T1
+mask_path_col: mask_path
+subject_col: subject_id
+binarize_label: true
+batch_size: 2
+max_epochs: 150
+val_every: 10
+lr: 1.0e-4
+weight_decay: 1.0e-5
+save_path: checkpoints/seg_atlas_unet.pt
+predictions_csv: results/predictions/seg_atlas_unet.csv

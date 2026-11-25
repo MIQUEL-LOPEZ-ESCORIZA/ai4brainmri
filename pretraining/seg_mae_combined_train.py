@@ -517,7 +517,16 @@ def build_seg(config, logger):
 
     groups = grouping() if config.DATA.GROUPING == "local" else grouping_total()
     decoder = ConvDecoder(num_regions=len(groups))
-    return PromptSegmentationModel(encoder=vit_enc, decoder=decoder)
+    model = PromptSegmentationModel(encoder=vit_enc, decoder=decoder)
+
+    # Optional: start from a checkpoint of a separate frozen-encoder (decoder-only) run instead of
+    # running that phase inside this script with TRAIN.FREEZE_ENCODER_EPOCHS.
+    if config.MODEL.SEG_PRETRAINED:
+        ckpt = torch.load(config.MODEL.SEG_PRETRAINED, map_location="cpu")
+        sd = ckpt.get("model_seg", ckpt.get("state_dict", ckpt))
+        sd = {k.replace("module.", ""): v for k, v in sd.items()}
+        logger.info(f"Loaded segmentation model from SEG_PRETRAINED: {model.load_state_dict(sd, strict=False)}")
+    return model
 
 # -----------------------------------------------------------------------------
 # Training orchestrator
@@ -551,6 +560,20 @@ def train_loop(config, models, optims, scheduler, criterion, device, logger, wan
 
         epoch_time = time.time()
 
+        # Phase control (paper Methods, "Anatomy Segmentation Pretraining"): during the first
+        # TRAIN.FREEZE_ENCODER_EPOCHS epochs only the segmentation decoder and region prompts are
+        # trained on top of the frozen MAE encoder, and no MAE epoch is run. Afterwards encoder and
+        # decoder are trained jointly, alternating segmentation and MAE epochs unless
+        # TRAIN.ALTERNATE_MAE is False (the "no MAE alternation" ablation). With the defaults
+        # (0 / True) the loop is unchanged from the original implementation.
+        freeze_phase = epoch < config.TRAIN.FREEZE_ENCODER_EPOCHS
+        if freeze_phase:
+            freeze_encoder(models["seg"])
+        elif config.TRAIN.FREEZE_ENCODER_EPOCHS and epoch == config.TRAIN.FREEZE_ENCODER_EPOCHS:
+            unfreeze_encoder(models["seg"])
+            logger.info(f"Epoch {epoch + 1}: encoder unfrozen, joint ASP training starts")
+        run_mae_epoch = config.TRAIN.ALTERNATE_MAE and not freeze_phase
+
         # SEG epoch ------------------------------------------------------------
         train_stats = train_one_epoch_seg(config, models["seg"], tr_loader, optims["seg"],
                             scheduler, criterion, epoch, max_epochs, logger,
@@ -566,14 +589,15 @@ def train_loop(config, models, optims, scheduler, criterion, device, logger, wan
         epoch_time = time.time()
 
         # MAE epoch ------------------------------------------------------------
-        train_stats=train_one_epoch_mae(config, models["mae"], tr_loader, optims["mae"],
-                            scheduler, epoch, max_epochs, logger, device,
-                            config.USE_AMP, scaler, wandb_run)
+        if run_mae_epoch:
+            train_stats=train_one_epoch_mae(config, models["mae"], tr_loader, optims["mae"],
+                                scheduler, epoch, max_epochs, logger, device,
+                                config.USE_AMP, scaler, wandb_run)
 
-        logger.info(
-            f"Final training for MAE  {epoch+1}/{max_epochs}, loss: {train_stats['loss']}, \
-                time {time.time() - epoch_time}s"
-        )
+            logger.info(
+                f"Final training for MAE  {epoch+1}/{max_epochs}, loss: {train_stats['loss']}, \
+                    time {time.time() - epoch_time}s"
+            )
 
         # update_model_weights(models, "seg", logger)
 
@@ -654,7 +678,11 @@ def main():
     mae_net = build_mae(config,logger).to(device)
 
     # DDP ---------------------------------------------------------------------
-    seg_net = torch.nn.parallel.DistributedDataParallel(seg_net, device_ids=[device], broadcast_buffers=False)
+    # Encoder parameters stop receiving gradients during the frozen phase, which DDP only
+    # tolerates with find_unused_parameters=True.
+    seg_net = torch.nn.parallel.DistributedDataParallel(
+        seg_net, device_ids=[device], broadcast_buffers=False,
+        find_unused_parameters=config.TRAIN.FREEZE_ENCODER_EPOCHS > 0)
     mae_net = torch.nn.parallel.DistributedDataParallel(mae_net, device_ids=[device], broadcast_buffers=False)
 
     models = {"seg": seg_net, "mae": mae_net}

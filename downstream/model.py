@@ -82,6 +82,18 @@ class ViTEncoder(nn.Module):
             x = block(x)
         return x[:, 0, :]
 
+    def forward_tokens(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        """Patch tokens (CLS token dropped) after the last block, plus the patch tokens after every
+        block -- the interface the UNETR decoder in `downstream/segmentation/` expects."""
+        x = self.patch_embedding(x)
+        cls_token = self.cls_token.expand(x.shape[0], -1, -1)
+        x = torch.cat((cls_token, x), dim=1)
+        hidden = []
+        for block in self.blocks:
+            x = block(x)
+            hidden.append(x[:, 1:, :])
+        return x[:, 1:, :], hidden
+
 
 class Head(nn.Module):
     """LayerNorm -> Linear on the CLS embedding. `num_classes=1` makes this a regression head."""
@@ -112,6 +124,37 @@ def freeze_all_but_last_block(encoder: ViTEncoder) -> None:
     last_block = f"blocks.{len(encoder.blocks) - 1}."
     for name, p in encoder.named_parameters():
         p.requires_grad = name.startswith(last_block)
+
+
+def prepare_encoder(encoder: ViTEncoder, config: Config) -> str:
+    """Apply the configured adaptation strategy (see `ModelConfig.adaptation`) to `encoder` in
+    place, after the pretrained weights are loaded. Returns a short description for logging.
+
+    Must also be called by `evaluate.py` *before* loading a LoRA checkpoint, so that the module
+    tree contains the adapter parameters the checkpoint expects.
+    """
+    m = config.model
+    adaptation = m.adaptation
+    if m.lock_backbone:
+        adaptation = "frozen"
+    elif m.lock_last_block_only:
+        adaptation = "partial"
+
+    if adaptation == "full":
+        return "full fine-tuning"
+    if adaptation == "frozen":
+        freeze_backbone(encoder)
+        return "frozen encoder (head only)"
+    if adaptation == "partial":
+        freeze_all_but_last_block(encoder)
+        return "partial fine-tuning (last block)"
+    if adaptation == "lora":
+        from downstream.lora import apply_lora, count_trainable
+
+        n = apply_lora(encoder, m.lora_rank, m.lora_alpha, m.lora_dropout, tuple(m.lora_targets))
+        trainable, total = count_trainable(encoder)
+        return f"LoRA r={m.lora_rank} alpha={m.lora_alpha} on {n} layers ({trainable:,}/{total:,} encoder params trainable)"
+    raise ValueError(f"unknown model.adaptation {adaptation!r} (expected lora/full/partial/frozen)")
 
 
 def _interpolate_pos_embed(encoder: ViTEncoder, state_dict: dict) -> None:

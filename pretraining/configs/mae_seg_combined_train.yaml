@@ -3,10 +3,10 @@ MODEL:
   # pretraining/README.md, "Stage 1"). Loaded by build_seg()/build_mae() respectively.
   SSL_PRETRAINED: /path/to/checkpoints/mae_pretrained.pt
   MAE_PRETRAINED: /path/to/checkpoints/mae_pretrained.pt
-  # NOT currently read by any code in seg_mae_combined_train.py (confirmed by grep) -- the name
-  # implies a prior "frozen encoder, train decoder only" checkpoint, but build_seg() only ever
-  # loads SSL_PRETRAINED. Left in place in case that phase is wired up later; don't rely on it.
-  SEG_PRETRAINED: /path/to/checkpoints/seg_freeze_dec_checkpoint.pth
+  # Optional checkpoint of a separate frozen-encoder (decoder-only) run. Leave empty: the paper's
+  # frozen phase is run inside seg_mae_combined_train.py via TRAIN.FREEZE_ENCODER_EPOCHS (see
+  # asp_paper.yaml).
+  SEG_PRETRAINED: ''
   CHECKPOINT_DIR: checkpoints/asp
 DATA:
   # Ships with the repo (pretraining/files/sample_segmentation.csv) as a real template --

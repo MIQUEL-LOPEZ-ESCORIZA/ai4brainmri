@@ -1,0 +1,21 @@
+# Full fine-tuning ablation (paper Supplementary, "ASP (FF)"): every encoder parameter is updated,
+# with the same optimization and augmentation settings as the LoRA config of the same task.
+task_name: full_ft_epilepsy_train
+
+data:
+  train_csv: /path/to/data/OpenNeuro_epilepsy_train.csv
+  val_csv: /path/to/data/OpenNeuro_epilepsy_train.csv
+  batch_size: 64
+
+model:
+  pretrained: /path/to/checkpoints/asp_pretrained.pth
+  num_classes: 2
+  adaptation: full
+  save_path: checkpoints/epilepsy_full_finetune.pt
+
+train:
+  max_epochs: 150 # same optimization/augmentation settings as LoRA (paper Methods)
+  val_every: 1
+  base_lr: 1.5e-4
+  weight_decay: 0.005
+  smooth_mci_label: false

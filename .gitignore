@@ -37,3 +37,22 @@ wandb/
 .DS_Store
 .idea/
 .vscode/
+
+# Run outputs of the reproduction scripts
+results/
+logs/
+
+# LaTeX build artifacts (paper/)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+!**/slurm/.gitkeep
+
+# Local archives
+*.zip

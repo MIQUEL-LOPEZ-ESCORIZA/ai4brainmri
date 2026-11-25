@@ -1,0 +1,18 @@
+# ResNet-18 baseline, brain age regression (train healthy UKBB+HCP+CamCAN+IXI; test UKBB holdout, healthy NACC and ADNI).
+task: regression
+arch: resnet18
+roi: [128, 128, 128]
+batch_size: 16
+max_epochs: 60
+lr: 0.01                       # SGD
+momentum: 0.0                  # not stated in the paper; plain SGD
+early_stopping_patience: 10    # on validation loss
+train_csv: /path/to/data/brain_age_train.csv
+val_csv: /path/to/data/brain_age_val.csv
+test_csv: /path/to/data/brain_age_test_all.csv
+img_path_col: img_path_T1_mni152
+label_col: age
+subject_col: subject_id
+cohort_col: source_dataset
+save_path: checkpoints/cnn_brain_age.pt
+predictions_csv: results/predictions/brain_age_cnn.csv

@@ -1,0 +1,73 @@
+# ASP (Anatomy Segmentation Pretraining) with the hyperparameters reported in the paper (Methods,
+# "Anatomy Segmentation Pretraining of Vision Transformer"):
+#   400 epochs, batch size 16 per GPU, binary cross-entropy (segmentation), AdamW
+#   (beta1 0.9, beta2 0.95, weight decay 0.04), base LR 5e-4 with cosine annealing and 5 warm-up
+#   epochs; first 100 epochs decoder-only on the frozen MAE encoder, then segmentation and MAE
+#   epochs alternate. Convergence ~200 epochs, ~1 month on one 42 GB RTX 8000.
+# The encoder is initialized from the stage-1 MAE checkpoint (configs/mae_train.yaml).
+# NOTE: the script rescales BASE_LR by (batch_size * world_size / 256), like stage 1.
+#
+# Ablations in the paper (Supplementary, "Ablation study on ASP training") are this file with:
+#   no MAE alternation:              TRAIN.ALTERNATE_MAE: False
+#   no alternation and no freezing:  TRAIN.ALTERNATE_MAE: False, TRAIN.FREEZE_ENCODER_EPOCHS: 0
+#   MAE only:                        the stage-1 checkpoint itself (no ASP)
+#   from scratch:                    MODEL.SSL_PRETRAINED / MAE_PRETRAINED: ''
+# See configs/asp_ablation_*.yaml.
+MODEL:
+  SSL_PRETRAINED: /path/to/checkpoints/mae_pretrained.pt
+  MAE_PRETRAINED: /path/to/checkpoints/mae_pretrained.pt
+  SEG_PRETRAINED: ''
+  CHECKPOINT_DIR: checkpoints/asp
+DATA:
+  TRAIN_CSV_PATH: /path/to/data/manifests/pretraining.csv   # preprocessing/build_manifest.py
+  CACHE_DIR: null
+  DATA_PERCENTAGE: 1.0
+  # 90% of pretraining participants for training; the UKBB holdout (10% of UKBB participants)
+  # must not be in TRAIN_CSV_PATH at all -- it is the internal brain-age test cohort.
+  TRAINING_PERCENTAGE: 0.9
+  GROUPING: 'global'          # the 39 grouped regions (files/selected_brain_regions.csv)
+  PIN_MEMORY: False
+  NUM_WORKERS: 4
+TRAIN:
+  MAX_EPOCHS: 400
+  BATCH_SIZE: 16
+  VAL_EVERY: 1
+  SAVECKP_FREQ: 10
+  BASE_LR: 5.0e-4
+  MIN_LR: 5.0e-7
+  BETA1: 0.9
+  BETA2: 0.95
+  WEIGHT_DECAY: 0.04
+  PER_WARMUP: 0.0125
+  WARMUP_EPOCHS: 5
+  GRAD_CLIP: 3.0
+  OPTIMIZER: AdamW
+  SCHEDULER: cosine
+  FREEZE_ENCODER_EPOCHS: 100
+  ALTERNATE_MAE: True
+VIT:
+  INPUT_SIZE: 128
+  PATCH_SIZE: 16
+  IN_CHANS: 1
+  DROPOUT_RATE: 0.
+  PATCH_EMBED: 'conv'
+  POS_EMBED: 'sincos'
+  SPATIAL_DIMS: 3
+  HIDDEN_SIZE: 768
+  NUM_LAYERS: 12
+  MLP_DIM: 3072
+  NUM_HEADS: 12
+  USE_BIAS: True
+  USE_FLASH_ATTN: False
+  SMOOTH_MCI_LABEL: True
+MAE:
+  MASK_RATIO: 0.4             # MAE epochs inside ASP (value from the original ASP code; stage 1 uses 0.75)
+WANDB:
+  WANDB_ENABLE: False
+  PROJECT: ASP
+  RUN: asp_paper
+LOG:
+  FILENAME: asp_paper
+SEED: 42
+OUTPUT: logs
+USE_AMP: true

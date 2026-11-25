@@ -1,6 +1,7 @@
-# Full fine-tuning of the ASP-pretrained encoder on Alzheimer's diagnosis (ADNI). Produces the
-# checkpoint that ../eval/ad_diagnosis.yaml scores (internal ADNI test cohort is one of the
-# per-cohort breakdowns in that combined test CSV, alongside the external cohorts).
+# LoRA adaptation (the paper's reported strategy) of the ASP-pretrained encoder for Alzheimer's
+# diagnosis, trained on ADNI. For the "Pretrained ViT" (plain MAE) row of the paper, run the same
+# config with --set model.pretrained=/path/to/checkpoints/mae_pretrained.pt
+# --set model.save_path=checkpoints/ad_diagnosis_mae.pt. Scored by ../eval/ad_diagnosis.yaml.
 task_name: ad_diagnosis_train
 
 data:
@@ -12,10 +13,13 @@ model:
   # Raw ASP-pretrained checkpoint (see pretraining/README.md) -- point this at your own.
   pretrained: /path/to/checkpoints/asp_pretrained.pth
   num_classes: 2 # binary classification head; label smoothing below turns 3 diagnoses into a soft 2-way target
+  adaptation: lora # paper default; see the *_full_finetune.yaml variant for the ablation
+  lora_rank: 8      # TODO(authors): confirm the rank/alpha used for the paper runs
+  lora_alpha: 16
   save_path: checkpoints/ad_diagnosis.pt
 
 train:
-  max_epochs: 100
+  max_epochs: 150 # paper Methods: LoRA trained for 150 epochs with AdamW
   val_every: 2
   base_lr: 1.5e-4
   weight_decay: 0.005

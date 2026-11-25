@@ -1,0 +1,18 @@
+# ResNet-18 baseline, Alzheimer's diagnosis (train ADNI, test ADNI internal + 7 external cohorts).
+task: soft_classification      # CN=0, MCI=0.5, AD=1 with binary cross-entropy
+arch: resnet18
+roi: [128, 128, 128]
+batch_size: 16
+max_epochs: 60
+lr: 0.01                       # SGD
+momentum: 0.0                  # not stated in the paper; plain SGD
+early_stopping_patience: 10    # on validation loss
+train_csv: /path/to/data/ADNI_train.csv
+val_csv: /path/to/data/ADNI_val.csv
+test_csv: /path/to/data/AD_test_all_cohorts.csv
+img_path_col: img_path_T1_mni152
+label_col: pred_label
+subject_col: subject_id
+cohort_col: source_dataset
+save_path: checkpoints/cnn_ad.pt
+predictions_csv: results/predictions/ad_cnn.csv

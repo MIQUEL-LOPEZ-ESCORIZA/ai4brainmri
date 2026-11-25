@@ -283,29 +283,25 @@ copying weights back and forth**, not one model with two loss heads:
 - Checkpoints every `TRAIN.SAVECKP_FREQ` epochs to `MODEL.CHECKPOINT_DIR/checkpoint_seg_XXXX.pth`
   — this is what `linear_probing/linear_probe_sweep.py` later sweeps over.
 
-**Two things the code does *not* do, despite what the paper's Methods section might lead you to
-expect:**
+**Phases and configs.**
 
-- **No explicit "freeze encoder, train decoder first" phase inside this script.**
-  `freeze_encoder`/`unfreeze_encoder` functions exist (lines 153–165) but are never called
-  anywhere in `train_loop()` or `main()`. `MODEL.SEG_PRETRAINED` in the config (pointing at a
-  `seg_freeze_dec_checkpoints/checkpoint.pth`, whose name implies exactly this frozen-encoder
-  phase) is likewise never read by `build_seg()` — only `MODEL.SSL_PRETRAINED` is (now annotated
-  in the YAML itself). Either that phase happened in a different, not-included script/run and its
-  checkpoint was meant to seed this one (but currently isn't wired up to), or it never actually
-  ran as a separate phase and the paper's description doesn't map 1:1 onto what's in this repo.
-  Worth resolving before citing this code as the source of that specific claim.
-- **`configs/mae_seg_combined_train.yaml`'s hyperparameters don't match the paper's stated ASP
-  run** (now flagged inline in the YAML too). YAML has `BASE_LR: 1.5e-8` (and the script rescales
-  it *smaller still* by `× batch_size/256`), `MAX_EPOCHS: 1000`, `WARMUP_EPOCHS: 0`. Paper states
-  400 epochs, base LR 5e-4, 5-epoch warmup. Most likely `mae_seg_combined_train.yaml` was edited
-  after the real run that produced the published checkpoint (e.g. for a later near-frozen
-  continuation run) — the actual config used for that run only exists in that run's own
-  `CHECKPOINT_DIR/config_dump.yaml` (the script writes one out every run), which isn't part of
-  this repo. **Left unchanged on purpose** — confirmed with the user rather than silently
-  "corrected."
-- **Mask ratio is 0.4** (`MAE.MASK_RATIO: 0.4`) for this stage, vs. 0.75 for stage-1 MAE
-  pretraining above.
+- **Frozen-encoder phase.** `TRAIN.FREEZE_ENCODER_EPOCHS` runs that many decoder-only epochs on
+  the frozen MAE encoder before joint training starts; no MAE epochs run during this phase.
+  `TRAIN.ALTERNATE_MAE: False` turns off the MAE epochs afterwards (an ablation). The defaults
+  (`0` / `True`) leave the original loop unchanged, so `configs/mae_seg_combined_train.yaml` still
+  behaves as before. `MODEL.SEG_PRETRAINED` can instead start from the checkpoint of a separate
+  decoder-only run.
+- **`configs/asp_paper.yaml`** carries the hyperparameters stated in the paper: 400 epochs, batch
+  size 16, AdamW (0.9, 0.95), weight decay 0.04, base LR 5e-4 with cosine annealing and 5 warm-up
+  epochs, and a 100-epoch frozen phase. `configs/asp_ablation_*.yaml` are the Supplementary
+  ablations: no MAE alternation; no alternation and no freezing; ASP from a randomly initialized
+  encoder. The "MAE only" variant is the stage-1 checkpoint itself. `jobs/asp_paper.sh <config>`
+  runs any of them.
+- **`configs/mae_seg_combined_train.yaml`** is the config of the original repository's last run,
+  kept for reference. Its learning rate (1.5e-8) and epoch count do not match the paper's run;
+  use `asp_paper.yaml` to reproduce the paper.
+- **Mask ratio.** The MAE epochs inside ASP use a 0.4 mask ratio (`MAE.MASK_RATIO`); stage-1 MAE
+  pretraining uses 0.75.
 
 ## `linear_probing/` — the Figure 4(b) mechanism
 
