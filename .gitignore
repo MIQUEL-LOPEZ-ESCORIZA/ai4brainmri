@@ -56,3 +56,6 @@ logs/
 
 # Local archives
 *.zip
+
+# compiled paper (Overleaf builds it)
+paper/*.pdf

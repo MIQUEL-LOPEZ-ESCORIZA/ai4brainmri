@@ -1048,16 +1048,9 @@ FUNCTION {format.booktitle}
   emphasize
 }
 FUNCTION {format.in.ed.booktitle}
-{  duplicate$ empty$ 'skip$
-    { 
-editor "editor" format.names.ed duplicate$ empty$ 'pop$
-        {  
-format.booktitle swap$
-"(" editor num.names$ #1 > 'bbl.in.editors 'bbl.editor if$  * swap$   ") " *
-          * swap$
-          * }
-      if$ 
-    }  
+{ % patched: the original version popped an empty stack when no editor was given
+  booktitle "booktitle" bibinfo.check duplicate$ empty$ 'skip$
+    { emphasize "In " swap$ * }
   if$
 }
 FUNCTION {empty.misc.check}
